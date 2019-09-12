@@ -79,12 +79,8 @@ module.exports = function transformer(file, api) {
 
   // remove DomMixin injection
   code = j(code)
-    .find(j.CallExpression, {
-      callee: {
-        property: {
-          name: 'extend',
-        },
-      },
+    .find(j.CallExpression, path => {
+      return ['extend', 'create'].includes(get(path, 'callee.property.name'));
     })
     .forEach(path => {
       path.value.arguments = path.value.arguments.filter(
@@ -123,16 +119,11 @@ module.exports = function transformer(file, api) {
       code = j(code)
         .find(j.CallExpression, path => {
           return (
-            [
-              'Component',
-              'Controller',
-              'Service',
-              'EmberObject',
-              'Model',
-              'Fragment',
-              'Route',
-              'Mixin',
-            ].includes(get(path, 'callee.object.name')) && get(path, 'callee.property.name') === 'extend'
+            (['Component', 'Controller', 'Service', 'EmberObject', 'Model', 'Fragment', 'Route'].includes(
+              get(path, 'callee.object.name'),
+            ) &&
+              get(path, 'callee.property.name') === 'extend') ||
+            (get(path, 'callee.object.name') === 'Mixin' && get(path, 'callee.property.name') === 'create')
           );
         })
         .forEach(path => {

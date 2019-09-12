@@ -16,6 +16,7 @@ ember-lifeline-codemods replace-mixins path/of/files/ or/some**/*glob.js
 
 <!--FIXTURES_TOC_START-->
 * [dom-mixin-existing-usage](#dom-mixin-existing-usage)
+* [dom-mixin-in-mixin](#dom-mixin-in-mixin)
 * [dom-mixin-var-before-export](#dom-mixin-var-before-export)
 * [dom-mixin-with-destroy](#dom-mixin-with-destroy)
 * [dom-mixin-without-destroy](#dom-mixin-without-destroy)
@@ -73,6 +74,53 @@ export default Component.extend(OtherMixin, {
     addEventListener(this, this.element, 'mouseover', this.someFunction);
 
     removeEventListener(this, this.element, 'mouseover', this.someFunction);
+    removeEventListener(this, this.element, 'mouseover', this.someFunction);
+  },
+
+  destroy() {
+    this._super(...arguments);
+    runDisposables(this);
+  }
+});
+
+```
+---
+<a id="dom-mixin-in-mixin">**dom-mixin-in-mixin**</a>
+
+**Input** (<small>[dom-mixin-in-mixin.input.js](transforms/replace-mixins/__testfixtures__/dom-mixin-in-mixin.input.js)</small>):
+```js
+import DomMixin from 'ember-lifeline/mixins/dom';
+import OtherMixin from 'other-mixin';
+import Mixin from '@ember/object/mixin';
+
+export default Mixin.create(DomMixin, OtherMixin, {
+  someFunction(event) {
+    console.log(event);
+  },
+
+  init() {
+    this._super(...arguments);
+    this.addEventListener(this.element, 'mouseover', this.someFunction);
+    this.removeEventListener(this.element, 'mouseover', this.someFunction);
+  },
+});
+
+```
+
+**Output** (<small>[dom-mixin-in-mixin.output.js](transforms/replace-mixins/__testfixtures__/dom-mixin-in-mixin.output.js)</small>):
+```js
+import { addEventListener, removeEventListener, runDisposables } from 'ember-lifeline';
+import OtherMixin from 'other-mixin';
+import Mixin from '@ember/object/mixin';
+
+export default Mixin.create(OtherMixin, {
+  someFunction(event) {
+    console.log(event);
+  },
+
+  init() {
+    this._super(...arguments);
+    addEventListener(this, this.element, 'mouseover', this.someFunction);
     removeEventListener(this, this.element, 'mouseover', this.someFunction);
   },
 
