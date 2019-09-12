@@ -1,9 +1,11 @@
 const { getParser } = require('codemod-cli').jscodeshift;
-const { getOptions } = require('codemod-cli');
+
+const OPTS = {
+  quote: 'single',
+};
 
 module.exports = function transformer(file, api) {
   const j = getParser(api);
-  const options = getOptions();
 
   let code;
   let usesDomMixin = j(file.source).find(j.ImportDeclaration, path => {
@@ -31,11 +33,13 @@ module.exports = function transformer(file, api) {
         let newArgs = [j.identifier('this'), ...args];
         j(path).replaceWith(j.callExpression(j.identifier('addEventListener'), newArgs));
       })
-      .toSource();
+      .toSource(OPTS);
 
-    let hasEventsListenerImport = Boolean(j(file.source).find(j.ImportSpecifier, path => {
-      return path.local.name === 'addEventListener';
-    }).length);
+    let hasEventsListenerImport = Boolean(
+      j(file.source).find(j.ImportSpecifier, path => {
+        return path.local.name === 'addEventListener';
+      }).length,
+    );
     code = j(code)
       .find(j.ImportDeclaration, {
         source: {
@@ -57,98 +61,89 @@ module.exports = function transformer(file, api) {
           );
         }
       })
-      .toSource();
-    }
+      .toSource(OPTS);
+  }
 
-    // remove DomMixin injection
+  // remove DomMixin injection
+  code = j(code)
+    .find(j.CallExpression, {
+      callee: {
+        property: {
+          name: 'extend',
+        },
+      },
+    })
+    .forEach(path => {
+      path.value.arguments = path.value.arguments.filter(
+        arg => arg.type !== 'Identifier' || (arg.type === 'Identifier' && arg.name !== 'DomMixin'),
+      );
+    })
+    .toSource(OPTS);
+
+  // Do we need to add `runDisposables`?
+  let usesRunDisposables = j(code).find(j.CallExpression, {
+    callee: {
+      name: 'runDisposables',
+    },
+  });
+
+  if (!usesRunDisposables.length) {
+    let injectedRunDisposables = false;
+    let runDisposableCall = j.callExpression(j.identifier('runDisposables'), [j.identifier('this')]);
+
+    // inject `runDisposables` if `destroy` exists
     code = j(code)
-      .find(j.CallExpression, {
-        callee: {
-          property: {
-            name: 'extend',
-          },
+      .find(j.ObjectMethod, {
+        key: {
+          name: 'destroy',
         },
       })
       .forEach(path => {
-        path.value.arguments = path.value.arguments.filter(
-          arg =>
-            arg.type !== 'Identifier' || (arg.type === 'Identifier' && arg.name !== 'DomMixin'),
-        );
+        injectedRunDisposables = true;
+        let callExp = j.expressionStatement(runDisposableCall);
+        path.value.body.body.push(callExp);
       })
-      .toSource();
+      .toSource(OPTS);
 
-    // Do we need to add `runDisposables`?
-    let usesRunDisposables = j(code).find(j.CallExpression, {
-      callee: {
-        name: 'runDisposables'
-      }
-    });
-
-    if (!usesRunDisposables.length) {
-      let injectedRunDisposables = false;
-      let runDisposableCall = j.callExpression(j.identifier('runDisposables'), [
-        j.identifier('this'),
-      ]);
-
-      // inject `runDisposables` if `destroy` exists
+    if (!injectedRunDisposables) {
+      // inject `runDisposables` if `destroy` does not exist
       code = j(code)
-        .find(j.ObjectMethod, {
-          key: {
-            name: 'destroy',
+        .find(j.ExportDefaultDeclaration, {
+          declaration: {
+            callee: {
+              property: {
+                name: 'extend',
+              },
+            },
           },
         })
         .forEach(path => {
-          injectedRunDisposables = true;
-          let callExp = j.expressionStatement(runDisposableCall);
-          path.value.body.body.push(callExp);
-        })
-        .toSource();
-
-      if (!injectedRunDisposables) {
-        // inject `runDisposables` if `destroy` does not exist
-        code = j(code)
-          .find(j.ExportDefaultDeclaration, {
-            declaration: {
-              callee: {
-                property: {
-                  name: 'extend',
-                },
-              },
-            },
-          })
-          .forEach(path => {
-            let ObjExp = path.value.declaration.arguments.find(
-              arg => arg.type === 'ObjectExpression',
-            );
-            let superCall = j.callExpression(
-              j.memberExpression(j.thisExpression(), j.identifier('_super')),
-              [j.identifier('...arguments')],
-            );
-            let prop = j.property(
-              'init',
+          let ObjExp = path.value.declaration.arguments.find(arg => arg.type === 'ObjectExpression');
+          let superCall = j.callExpression(j.memberExpression(j.thisExpression(), j.identifier('_super')), [
+            j.identifier('...arguments'),
+          ]);
+          let prop = j.property(
+            'init',
+            j.identifier('destroy'),
+            j.functionExpression(
               j.identifier('destroy'),
-              j.functionExpression(
-                j.identifier('destroy'),
-                [],
-                j.blockStatement([
-                  j.expressionStatement(superCall),
-                  j.expressionStatement(runDisposableCall),
-                ]),
-              ),
-            );
-            prop.method = true;
-            let index = ObjExp.properties.findIndex(prop =>
-              ['init', 'didInsertElement'].includes(prop.key.name),
-            );
-            if (index > -1) {
-              ObjExp.properties.splice(index + 1, 0, prop);
-            } else {
-              ObjExp.properties.push(prop);
-            }
-          })
-          .toSource();
-      }
+              [],
+              j.blockStatement([j.expressionStatement(superCall), j.expressionStatement(runDisposableCall)]),
+            ),
+          );
+          prop.method = true;
+          let index = ObjExp.properties.findIndex(prop =>
+            ['init', 'didInsertElement'].includes(prop.key.name),
+          );
+          if (index > -1) {
+            ObjExp.properties.splice(index + 1, 0, prop);
+          } else {
+            ObjExp.properties.push(prop);
+          }
+        })
+        .toSource(OPTS);
+    }
   }
 
   return code;
-}
+};
