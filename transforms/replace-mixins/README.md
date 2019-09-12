@@ -16,6 +16,7 @@ ember-lifeline-codemods replace-mixins path/of/files/ or/some**/*glob.js
 
 <!--FIXTURES_TOC_START-->
 * [dom-mixin-existing-usage](#dom-mixin-existing-usage)
+* [dom-mixin-var-before-export](#dom-mixin-var-before-export)
 * [dom-mixin-with-destroy](#dom-mixin-with-destroy)
 * [dom-mixin-without-destroy](#dom-mixin-without-destroy)
 <!--FIXTURES_TOC_END-->
@@ -81,6 +82,56 @@ export default Component.extend(OtherMixin, {
   }
 });
 
+```
+---
+<a id="dom-mixin-var-before-export">**dom-mixin-var-before-export**</a>
+
+**Input** (<small>[dom-mixin-var-before-export.input.js](transforms/replace-mixins/__testfixtures__/dom-mixin-var-before-export.input.js)</small>):
+```js
+import DomMixin from 'ember-lifeline/mixins/dom';
+import OtherMixin from 'other-mixin';
+import Component from '@ember/component';
+
+const MyComponent = Component.extend(DomMixin, OtherMixin, {
+  someFunction(event) {
+    console.log(event);
+  },
+  
+  didInsertElement() {
+    this._super(...arguments);
+    this.addEventListener(this.element, 'mouseover', this.someFunction);
+    this.removeEventListener(this.element, 'mouseover', this.someFunction);
+  },
+});
+
+export default MyComponent;
+
+```
+
+**Output** (<small>[dom-mixin-var-before-export.output.js](transforms/replace-mixins/__testfixtures__/dom-mixin-var-before-export.output.js)</small>):
+```js
+import { addEventListener, removeEventListener, runDisposables } from 'ember-lifeline';
+import OtherMixin from 'other-mixin';
+import Component from '@ember/component';
+
+const MyComponent = Component.extend(OtherMixin, {
+  someFunction(event) {
+    console.log(event);
+  },
+
+  didInsertElement() {
+    this._super(...arguments);
+    addEventListener(this, this.element, 'mouseover', this.someFunction);
+    removeEventListener(this, this.element, 'mouseover', this.someFunction);
+  },
+
+  destroy() {
+    this._super(...arguments);
+    runDisposables(this);
+  }
+});
+
+export default MyComponent;
 ```
 ---
 <a id="dom-mixin-with-destroy">**dom-mixin-with-destroy**</a>
