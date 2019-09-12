@@ -1,15 +1,15 @@
-# dom-mixin
+# replace-mixins
 
 
 ## Usage
 
 ```
-npx ember-lifeline-codemods dom-mixin path/of/files/ or/some**/*glob.js
+npx ember-lifeline-codemods replace-mixins path/of/files/ or/some**/*glob.js
 
 # or
 
 yarn global add ember-lifeline-codemods
-ember-lifeline-codemods dom-mixin path/of/files/ or/some**/*glob.js
+ember-lifeline-codemods replace-mixins path/of/files/ or/some**/*glob.js
 ```
 
 ## Input / Output
