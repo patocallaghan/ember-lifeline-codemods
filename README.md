@@ -19,6 +19,7 @@ ember-lifeline-codemods <TRANSFORM NAME> path/of/files/ or/some**/*glob.js
 ## Transforms
 
 <!--TRANSFORMS_START-->
+* [replace-mixins](transforms/replace-mixins/README.md)
 <!--TRANSFORMS_END-->
 
 ## Contributing
