@@ -79,12 +79,8 @@ module.exports = function transformer(file, api) {
 
   // remove DomMixin injection
   code = j(code)
-    .find(j.CallExpression, {
-      callee: {
-        property: {
-          name: 'extend',
-        },
-      },
+    .find(j.CallExpression, path => {
+      return ['extend', 'create'].includes(get(path, 'callee.property.name'));
     })
     .forEach(path => {
       path.value.arguments = path.value.arguments.filter(
@@ -121,17 +117,17 @@ module.exports = function transformer(file, api) {
     if (!injectedRunDisposables) {
       // inject `runDisposables` if `destroy` does not exist
       code = j(code)
-        .find(j.ExportDefaultDeclaration, {
-          declaration: {
-            callee: {
-              property: {
-                name: 'extend',
-              },
-            },
-          },
+        .find(j.CallExpression, path => {
+          return (
+            (['Component', 'Controller', 'Service', 'EmberObject', 'Model', 'Fragment', 'Route'].includes(
+              get(path, 'callee.object.name'),
+            ) &&
+              get(path, 'callee.property.name') === 'extend') ||
+            (get(path, 'callee.object.name') === 'Mixin' && get(path, 'callee.property.name') === 'create')
+          );
         })
         .forEach(path => {
-          let ObjExp = path.value.declaration.arguments.find(arg => arg.type === 'ObjectExpression');
+          let ObjExp = path.value.arguments.find(arg => arg.type === 'ObjectExpression');
           let superCall = j.callExpression(j.memberExpression(j.thisExpression(), j.identifier('_super')), [
             j.identifier('...arguments'),
           ]);
