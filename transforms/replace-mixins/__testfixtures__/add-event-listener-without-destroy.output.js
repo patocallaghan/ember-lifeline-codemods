@@ -1,11 +1,12 @@
-import { addEventListener, runDisposables } from "ember-lifeline";
+import { addEventListener, runDisposables } from 'ember-lifeline';
 import OtherMixin from 'other-mixin';
+import Component from '@ember/component';
 
 export default Component.extend(OtherMixin, {
   didInsertElement() {
     this._super(...arguments);
     addEventListener(this, this.element, 'mouseover', event => {
-      // something
+      console.log(event);
     });
   },
 
