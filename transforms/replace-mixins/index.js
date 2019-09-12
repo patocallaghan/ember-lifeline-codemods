@@ -1,4 +1,5 @@
 const { getParser } = require('codemod-cli').jscodeshift;
+const get = require('lodash.get');
 
 const OPTS = {
   quote: 'single',
@@ -8,6 +9,8 @@ module.exports = function transformer(file, api) {
   const j = getParser(api);
 
   let code;
+  let hasInjectedAddEventListener = false;
+  let hasInjectedRemoveEventListener = false;
   let usesDomMixin = j(file.source).find(j.ImportDeclaration, path => {
     return path.specifiers.find(specifier => specifier.local.name === 'DomMixin');
   });
@@ -18,26 +21,32 @@ module.exports = function transformer(file, api) {
 
   if (usesDomMixin.length) {
     code = j(file.source)
-      .find(j.CallExpression, {
-        callee: {
-          object: {
-            type: 'ThisExpression',
-          },
-          property: {
-            name: 'addEventListener',
-          },
-        },
+      .find(j.CallExpression, path => {
+        return (
+          get(path, 'callee.object.type') === 'ThisExpression' &&
+          ['addEventListener', 'removeEventListener'].includes(get(path, 'callee.property.name'))
+        );
       })
       .forEach(path => {
         let args = path.value.arguments;
         let newArgs = [j.identifier('this'), ...args];
-        j(path).replaceWith(j.callExpression(j.identifier('addEventListener'), newArgs));
+        if (path.value.callee.property.name === 'addEventListener') {
+          hasInjectedAddEventListener = true;
+        } else if (path.value.callee.property.name === 'removeEventListener') {
+          hasInjectedRemoveEventListener = true;
+        }
+        j(path).replaceWith(j.callExpression(j.identifier(path.value.callee.property.name), newArgs));
       })
       .toSource(OPTS);
 
-    let hasEventsListenerImport = Boolean(
+    let hasAddEventListenerImport = Boolean(
       j(file.source).find(j.ImportSpecifier, path => {
         return path.local.name === 'addEventListener';
+      }).length,
+    );
+    let hasRemoveEventListenerImport = Boolean(
+      j(file.source).find(j.ImportSpecifier, path => {
+        return path.local.name === 'removeEventListener';
       }).length,
     );
     code = j(code)
@@ -47,18 +56,22 @@ module.exports = function transformer(file, api) {
         },
       })
       .forEach(path => {
-        if (hasEventsListenerImport) {
+        if (hasAddEventListenerImport) {
           path.prune();
         } else {
-          j(path).replaceWith(
-            j.importDeclaration(
-              [
-                j.importSpecifier(j.identifier('addEventListener'), j.identifier('addEventListener')),
-                j.importSpecifier(j.identifier('runDisposables'), j.identifier('runDisposables')),
-              ],
-              j.literal('ember-lifeline'),
-            ),
-          );
+          let imports = [];
+          if (hasInjectedAddEventListener && !hasAddEventListenerImport) {
+            imports.push(
+              j.importSpecifier(j.identifier('addEventListener'), j.identifier('addEventListener')),
+            );
+          }
+          if (hasInjectedRemoveEventListener && !hasRemoveEventListenerImport) {
+            imports.push(
+              j.importSpecifier(j.identifier('removeEventListener'), j.identifier('removeEventListener')),
+            );
+          }
+          imports.push(j.importSpecifier(j.identifier('runDisposables'), j.identifier('runDisposables')));
+          j(path).replaceWith(j.importDeclaration(imports, j.literal('ember-lifeline')));
         }
       })
       .toSource(OPTS);
