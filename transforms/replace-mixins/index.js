@@ -29,6 +29,11 @@ module.exports = function transformer(file, api) {
       })
       .forEach(path => {
         let args = path.value.arguments;
+        if (args[0].type === 'StringLiteral') {
+          console.log(
+            `[ember-lifeline-codemod ACTION REQUIRED] filename: ${file.path}\nYou must provide an element (not a DOM selector) as an argument to \`${path.value.callee.property.name}\``,
+          );
+        }
         let newArgs = [j.identifier('this'), ...args];
         if (path.value.callee.property.name === 'addEventListener') {
           hasInjectedAddEventListener = true;
